@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { TournamentProvider } from './context/TournamentContext';
 import { VotingBoard } from './pages/VotingBoard';

@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useTournament } from '../context/TournamentContext';
 import type { Match, Participant } from '../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { Bracket } from '../components/Bracket';
 
 export const AdminBoard: React.FC = () => {
-  const { matches, addMatch, updateMatch, deleteMatch, currentUser } = useTournament();
+  const { matches, addMatch, updateMatch, deleteMatch, restartRound, currentUser } = useTournament();
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>(undefined);
-  const navigate = useNavigate();
 
   // If not admin, maybe redirect. For demo, we just allow it or check simple role.
   if (currentUser && !currentUser.roles.includes('admin')) {
@@ -17,6 +16,8 @@ export const AdminBoard: React.FC = () => {
 
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [showFormModal, setShowFormModal] = useState(false);
+  const [configRound, setConfigRound] = useState<number | null>(null);
+  const [roundDuration, setRoundDuration] = useState<number>(5);
   const [newMatch, setNewMatch] = useState<{
     p1Name: string; p1Img: string; p2Name: string; p2Img: string; duration: number;
   }>({
@@ -85,8 +86,8 @@ export const AdminBoard: React.FC = () => {
       const m1 = currentRoundMatches[i];
       const m2 = currentRoundMatches[i + 1];
       
-      const winner1 = m1.votes1 > m1.votes2 ? m1.participant1 : m1.participant2;
-      const winner2 = m2 ? (m2.votes1 > m2.votes2 ? m2.participant1 : m2.participant2) : null;
+      const winner1 = !m1.participant2 || m1.votes1 >= m1.votes2 ? m1.participant1 : m1.participant2;
+      const winner2 = m2 ? (!m2.participant2 || m2.votes1 >= m2.votes2 ? m2.participant1 : m2.participant2) : null;
       
       addMatch({
         id: Date.now().toString() + i,
@@ -113,12 +114,40 @@ export const AdminBoard: React.FC = () => {
     });
   };
 
+  const handleStartRound = () => {
+    if (configRound === null) return;
+    const roundMatches = matches.filter(m => m.round === configRound);
+    roundMatches.forEach(m => {
+      updateMatch(m.id, { status: 'active', endTime: Date.now() + roundDuration * 60000 });
+    });
+    setConfigRound(null);
+  };
+
+  const handleEndRound = () => {
+    if (configRound === null) return;
+    const roundMatches = matches.filter(m => m.round === configRound && m.status === 'active');
+    roundMatches.forEach(m => {
+      updateMatch(m.id, { status: 'completed' });
+    });
+    setConfigRound(null);
+  };
+
+  const handleRestartRound = () => {
+    if (configRound === null) return;
+    if (window.confirm('WARNING: Restarting will delete ALL votes in this round and DELETE all future rounds. This action is irreversible. Continue?')) {
+      restartRound(configRound, roundDuration);
+      setConfigRound(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#111] text-gray-200 font-sans p-8">
       <div className="max-w-4xl mx-auto">
-        <header className="flex items-center gap-4 mb-8 border-b border-white/10 pb-4">
-          <Link to="/" className="p-2 hover:bg-white/5 rounded-full"><ArrowLeft size={24} /></Link>
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <header className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+          <h1 className="text-2xl font-bold text-orange-400">Bảng Quản Trị</h1>
+          <Link to="/" className="text-gray-400 hover:text-white flex items-center gap-2">
+            <ArrowLeft size={18} /> Quay lại Bình Chọn
+          </Link>
           <button 
             onClick={() => {
               setIsEditing(null);
@@ -127,27 +156,33 @@ export const AdminBoard: React.FC = () => {
             }}
             className="ml-auto bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded flex items-center gap-2 text-sm font-medium"
           >
-            <Plus size={18} /> Add New Match
+            <Plus size={18} /> Thêm Trận Đấu
           </button>
         </header>
 
         {/* Existing Matches List */}
         <section>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">Tournament Tree</h2>
+            <h2 className="text-lg font-semibold text-gray-300">Cây Giải Đấu</h2>
             <button 
               onClick={generateNextRound}
               className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium"
             >
-              Advance Winners to Next Round
+              Chuyển Người Thắng Sang Vòng Tiếp Theo
             </button>
           </div>
-          <Bracket matches={matches} onMatchClick={(m) => {
-            setSelectedMatchId(m.id);
-            handleEditClick(m);
-          }} activeMatchId={selectedMatchId} />
+          <Bracket 
+            matches={matches} 
+            onMatchClick={(m) => {
+              setSelectedMatchId(m.id);
+              handleEditClick(m);
+            }} 
+            activeMatchId={selectedMatchId}
+            isAdmin={true}
+            onRoundConfigClick={(round) => setConfigRound(round)}
+          />
           
-          {matches.length === 0 && <p className="text-gray-500 italic mt-8">No matches created yet.</p>}
+          {matches.length === 0 && <p className="text-gray-500 italic mt-8">Chưa có trận đấu nào.</p>}
         </section>
       </div>
 
@@ -163,14 +198,14 @@ export const AdminBoard: React.FC = () => {
               ✕
             </button>
             <h2 className="text-xl font-bold text-orange-400 mb-6">
-              {isEditing ? 'Edit Match' : 'Add New Match'}
+              {isEditing ? 'Sửa Trận Đấu' : 'Thêm Trận Đấu'}
             </h2>
             <form onSubmit={handleCreateOrUpdate} className="space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <h3 className="font-medium text-blue-400 text-lg">Option 1</h3>
+                  <h3 className="font-medium text-blue-400 text-lg">Lựa chọn 1</h3>
                   <input 
-                    type="text" required placeholder="Name" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
+                    type="text" required placeholder="Tên" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
                     value={newMatch.p1Name} onChange={e => setNewMatch({...newMatch, p1Name: e.target.value})}
                   />
                   <div className="relative">
@@ -191,9 +226,9 @@ export const AdminBoard: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <h3 className="font-medium text-red-400 text-lg">Option 2</h3>
+                  <h3 className="font-medium text-red-400 text-lg">Lựa chọn 2</h3>
                   <input 
-                    type="text" required placeholder="Name" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
+                    type="text" required placeholder="Tên" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
                     value={newMatch.p2Name} onChange={e => setNewMatch({...newMatch, p2Name: e.target.value})}
                   />
                   <div className="relative">
@@ -217,7 +252,7 @@ export const AdminBoard: React.FC = () => {
               
               <div className="flex items-end justify-between pt-6 border-t border-white/10 flex-wrap gap-4">
                 <div className="w-32">
-                  <label className="block text-sm text-gray-400 mb-1">Duration (min)</label>
+                  <label className="block text-sm text-gray-400 mb-1">Thời gian (phút)</label>
                   <input 
                     type="number" min="1" required className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
                     value={newMatch.duration} onChange={e => setNewMatch({...newMatch, duration: parseInt(e.target.value)})}
@@ -235,7 +270,7 @@ export const AdminBoard: React.FC = () => {
                           onClick={() => { handleStart(match.id, newMatch.duration); setShowFormModal(false); }}
                           className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-medium"
                         >
-                          Start Voting
+                          Bắt đầu Bình Chọn
                         </button>
                       )}
                       {match.status === 'active' && (
@@ -244,7 +279,7 @@ export const AdminBoard: React.FC = () => {
                           onClick={() => { updateMatch(match.id, { status: 'completed' }); setShowFormModal(false); }}
                           className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-medium"
                         >
-                          End Voting
+                          Kết thúc Bình Chọn
                         </button>
                       )}
                       <button 
@@ -257,7 +292,7 @@ export const AdminBoard: React.FC = () => {
                         }}
                         className="px-4 py-2 bg-red-900/50 hover:bg-red-800 text-white rounded"
                       >
-                        Delete Match
+                        Xoá Trận Đấu
                       </button>
                     </div>
                   );
@@ -265,14 +300,61 @@ export const AdminBoard: React.FC = () => {
 
                 <div className="flex gap-3 ml-auto">
                   <button type="button" onClick={() => setShowFormModal(false)} className="px-6 py-3 rounded-lg font-medium text-gray-300 hover:bg-white/5">
-                    Cancel
+                    Huỷ
                   </button>
                   <button type="submit" className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-lg font-bold transition-colors">
-                    {isEditing ? 'Save' : 'Create'}
+                    {isEditing ? 'Lưu' : 'Tạo'}
                   </button>
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {configRound !== null && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={(e) => {
+          if (e.target === e.currentTarget) setConfigRound(null);
+        }}>
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-xl max-w-sm w-full p-6 shadow-2xl relative">
+            <button 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              onClick={() => setConfigRound(null)}
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-bold text-orange-400 mb-6">
+              Cài đặt Vòng {configRound}
+            </h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Thời gian bình chọn (phút)</label>
+                <input 
+                  type="number" min="1" required className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-orange-500"
+                  value={roundDuration} onChange={e => setRoundDuration(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={handleStartRound}
+                  className="w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold transition-colors"
+                >
+                  Bắt đầu Bình Chọn Vòng
+                </button>
+                <button 
+                  onClick={handleEndRound}
+                  className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold transition-colors"
+                >
+                  Kết thúc Bình Chọn Vòng
+                </button>
+                <button 
+                  onClick={handleRestartRound}
+                  className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-lg font-bold transition-colors mt-4 border border-red-500/50"
+                >
+                  CHƠI LẠI VÒNG (CẢNH BÁO)
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

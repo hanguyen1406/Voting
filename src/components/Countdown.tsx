@@ -23,7 +23,7 @@ export const Countdown: React.FC<{ endTime: number | null }> = ({
     const s = Math.floor((timeLeft % 60000) / 1000);
 
     return (
-        <div className="text-3xl font-bold font-mono bg-yellow-900/40 text-yellow-500 px-6 py-2 rounded-lg border border-yellow-700/50">
+        <div className="text-3xl md:text-5xl font-black font-mono text-[#e8d5c4] tracking-wider drop-shadow-[0_0_10px_rgba(232,213,196,0.3)] inline-block">
             {m.toString().padStart(2, "0")}:{s.toString().padStart(2, "0")}
         </div>
     );
