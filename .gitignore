@@ -6,8 +6,6 @@
 # testing
 /coverage
 
-# production
-/dist
 
 # local database
 /server/database.sqlite
