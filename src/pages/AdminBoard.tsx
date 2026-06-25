@@ -5,7 +5,7 @@ import { Plus } from 'lucide-react';
 import { Bracket } from '../components/Bracket';
 
 export const AdminBoard: React.FC = () => {
-  const { matches, addMatch, updateMatch, deleteMatch } = useTournament();
+  const { matches, addMatch, updateMatch, deleteMatch, deleteRound } = useTournament();
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>(undefined);
 
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -59,10 +59,8 @@ export const AdminBoard: React.FC = () => {
       updateMatch(isEditing, { participant1: p1, participant2: p2, winnerId: newMatch.winnerId });
       setIsEditing(null);
     } else {
-      const p1Id = Date.now().toString() + '1';
-      const p2Id = Date.now().toString() + '2';
-      const p1: Participant = { id: p1Id, name: newMatch.p1Name, imageUrl: newMatch.p1Img };
-      const p2: Participant = { id: p2Id, name: newMatch.p2Name, imageUrl: newMatch.p2Img };
+      const p1: Participant = { id: newMatch.p1Id, name: newMatch.p1Name, imageUrl: newMatch.p1Img };
+      const p2: Participant = { id: newMatch.p2Id, name: newMatch.p2Name, imageUrl: newMatch.p2Img };
       
       const newRound = matches.length > 0 ? Math.min(...matches.map(m => m.round)) : 1;
       
@@ -75,7 +73,7 @@ export const AdminBoard: React.FC = () => {
         votes2: 0,
         status: 'completed',
         endTime: null,
-        winnerId: null
+        winnerId: newMatch.winnerId
       });
     }
     setNewMatch({ p1Name: '', p1Img: '', p2Name: '', p2Img: '', winnerId: null, p1Id: '', p2Id: '' });
@@ -126,6 +124,20 @@ export const AdminBoard: React.FC = () => {
     }
   };
 
+  const handleDeleteRound = async (round: number) => {
+    if (matches.length === 0) return;
+    const maxRound = Math.max(...matches.map(m => m.round));
+    
+    let warningMsg = `Bạn có chắc chắn muốn xoá Vòng ${round}?`;
+    if (maxRound > round) {
+      warningMsg += `\n\nCẢNH BÁO: Tất cả các vòng đấu phía sau (từ Vòng ${round + 1} đến Vòng ${maxRound}) cũng sẽ bị xoá sạch hoàn toàn!`;
+    }
+    
+    if (confirm(warningMsg)) {
+      await deleteRound(round);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#111] text-gray-200 font-sans p-8">
       <div className="max-w-4xl mx-auto">
@@ -166,6 +178,7 @@ export const AdminBoard: React.FC = () => {
               handleEditClick(m);
             }} 
             activeMatchId={selectedMatchId}
+            onDeleteRound={handleDeleteRound}
           />
           
           {matches.length === 0 && <p className="text-gray-500 italic mt-8">Chưa có trận đấu nào.</p>}

@@ -1,16 +1,19 @@
 import React from 'react';
 import type { Match } from '../types';
+import { Trash2 } from 'lucide-react';
 
 interface BracketProps {
   matches: Match[];
   onMatchClick: (match: Match) => void;
   activeMatchId?: string;
+  onDeleteRound?: (round: number) => void;
 }
 
 export const Bracket: React.FC<BracketProps> = ({ 
   matches, 
   onMatchClick, 
-  activeMatchId
+  activeMatchId,
+  onDeleteRound
 }) => {
   // Group matches by round
   const rounds = matches.reduce((acc, match) => {
@@ -27,8 +30,23 @@ export const Bracket: React.FC<BracketProps> = ({
         <div key={round} className="flex flex-col justify-around relative z-10 w-72 shrink-0">
           
           {/* Round Header */}
-          <div className="absolute -top-12 left-4 right-4 text-center font-bold text-gray-300 uppercase tracking-widest bg-white/5 py-2 rounded-lg border border-white/10 flex justify-center items-center gap-2 z-20 shadow-md">
-            Vòng {round}
+          <div className="absolute -top-12 left-4 right-4 font-bold text-gray-300 uppercase tracking-widest bg-white/5 py-1.5 px-3 rounded-lg border border-white/10 flex justify-between items-center z-20 shadow-md">
+            <div className="w-6 shrink-0"></div>
+            <span className="flex-1 text-center text-xs md:text-sm">Vòng {round}</span>
+            {onDeleteRound ? (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteRound(round);
+                }}
+                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors rounded hover:bg-white/5 shrink-0"
+                title={`Xoá Vòng ${round} và các vòng tiếp theo`}
+              >
+                <Trash2 size={13} />
+              </button>
+            ) : (
+              <div className="w-6 shrink-0"></div>
+            )}
           </div>
 
           {rounds[round].map((match, mIndex) => {

@@ -7,6 +7,7 @@ interface TournamentContextType {
     addMatch: (match: Match) => Promise<void>;
     updateMatch: (id: string, match: Partial<Match>) => Promise<void>;
     deleteMatch: (id: string) => Promise<void>;
+    deleteRound: (round: number) => Promise<void>;
     restartRound: (round: number, duration: number) => Promise<void>;
     vote: (matchId: string, participantIndex: 1 | 2) => Promise<void>;
     loginWithGoogle: () => void;
@@ -94,6 +95,23 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     };
 
+    const deleteRound = async (round: number) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/rounds/${round}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                await fetchMatches();
+            } else {
+                const err = await res.json();
+                alert(err.error || "Không thể xoá vòng đấu.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Lỗi kết nối khi xoá vòng đấu.");
+        }
+    };
+
     const restartRound = async (round: number, duration: number) => {
         try {
             const res = await fetch(`${API_BASE_URL}/rounds/${round}/restart`, {
@@ -153,6 +171,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({
                 addMatch,
                 updateMatch,
                 deleteMatch,
+                deleteRound,
                 restartRound,
                 vote,
                 loginWithGoogle,

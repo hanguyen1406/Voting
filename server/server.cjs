@@ -141,6 +141,24 @@ app.delete('/api/matches/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/rounds/:round - Delete a round and all subsequent rounds
+app.delete('/api/rounds/:round', async (req, res) => {
+  const { round } = req.params;
+  const roundNum = parseInt(round, 10);
+  try {
+    const matchesToDelete = await query.all('SELECT id FROM matches WHERE round >= ?', [roundNum]);
+    for (const m of matchesToDelete) {
+      await query.run('DELETE FROM matches WHERE id = ?', [m.id]);
+      await query.run('DELETE FROM votes WHERE match_id = ?', [m.id]);
+    }
+    res.json({ success: true, message: 'Round and subsequent rounds deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting round:', error);
+    res.status(500).json({ error: 'Failed to delete round from database.' });
+  }
+});
+
+
 // POST /api/rounds/:round/restart - Reset round matches and delete future rounds
 app.post('/api/rounds/:round/restart', async (req, res) => {
   const { round } = req.params;
