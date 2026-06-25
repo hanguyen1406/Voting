@@ -24,16 +24,17 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
     const [matches, setMatches] = useState<Match[]>([]);
 
-    const [currentUser, setCurrentUser] = useState<User | null>(() => {
-        const saved = localStorage.getItem("tournament_user");
-        return saved ? JSON.parse(saved) : null;
+    const [currentUser, setCurrentUser] = useState<User | null>({
+        id: "admin",
+        name: "Admin",
+        email: "admin@example.com",
+        avatar: "",
+        roles: ["admin"]
     });
 
     const fetchMatches = async () => {
         try {
-            const url = currentUser
-                ? `${API_BASE_URL}/matches?userId=${currentUser.id}`
-                : `${API_BASE_URL}/matches`;
+            const url = `${API_BASE_URL}/matches`;
             const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
@@ -48,18 +49,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({
 
     useEffect(() => {
         fetchMatches();
-    }, [currentUser]);
-
-    useEffect(() => {
-        if (currentUser) {
-            localStorage.setItem(
-                "tournament_user",
-                JSON.stringify(currentUser),
-            );
-        } else {
-            localStorage.removeItem("tournament_user");
-        }
-    }, [currentUser]);
+    }, []);
 
     const addMatch = async (match: Match) => {
         try {

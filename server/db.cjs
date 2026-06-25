@@ -27,9 +27,15 @@ function initializeDb() {
         votes1 INTEGER DEFAULT 0,
         votes2 INTEGER DEFAULT 0,
         status TEXT CHECK(status IN ('pending', 'active', 'completed')) DEFAULT 'pending',
-        endTime INTEGER
+        endTime INTEGER,
+        winner_id TEXT
       )
     `);
+
+    // Migrate existing database to add winner_id column if it doesn't exist
+    db.run("ALTER TABLE matches ADD COLUMN winner_id TEXT", (err) => {
+      // Ignore error if column already exists
+    });
 
     // Create Votes table to track who voted for which match
     db.run(`

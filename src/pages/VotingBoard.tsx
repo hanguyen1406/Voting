@@ -55,7 +55,6 @@ export const VotingBoard: React.FC = () => {
                             setShowVotingModal(true);
                         }} 
                         activeMatchId={activeMatch?.id}
-                        isAdmin={false} // Users do not get admin controls
                     />
                 </div>
             </main>

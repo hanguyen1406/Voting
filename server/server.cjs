@@ -27,6 +27,7 @@ app.get('/api/matches', async (req, res) => {
       votes2: m.votes2,
       status: m.status,
       endTime: m.endTime,
+      winnerId: m.winner_id || null,
       userVotedOption: null
     }));
 
@@ -54,11 +55,11 @@ app.get('/api/matches', async (req, res) => {
 
 // POST /api/matches - Create a new match in the tournament
 app.post('/api/matches', async (req, res) => {
-  const { id, round, participant1, participant2, votes1, votes2, status, endTime } = req.body;
+  const { id, round, participant1, participant2, votes1, votes2, status, endTime, winnerId } = req.body;
   try {
     await query.run(`
-      INSERT INTO matches (id, round, p1_id, p1_name, p1_imageUrl, p2_id, p2_name, p2_imageUrl, votes1, votes2, status, endTime)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO matches (id, round, p1_id, p1_name, p1_imageUrl, p2_id, p2_name, p2_imageUrl, votes1, votes2, status, endTime, winner_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       round,
@@ -71,7 +72,8 @@ app.post('/api/matches', async (req, res) => {
       votes1 || 0,
       votes2 || 0,
       status || 'pending',
-      endTime || null
+      endTime || null,
+      winnerId || null
     ]);
     res.status(201).json({ success: true, message: 'Match created successfully' });
   } catch (error) {
@@ -93,6 +95,7 @@ app.put('/api/matches/:id', async (req, res) => {
     if (updateFields.endTime !== undefined) { fields.push('endTime = ?'); values.push(updateFields.endTime); }
     if (updateFields.votes1 !== undefined) { fields.push('votes1 = ?'); values.push(updateFields.votes1); }
     if (updateFields.votes2 !== undefined) { fields.push('votes2 = ?'); values.push(updateFields.votes2); }
+    if (updateFields.winnerId !== undefined) { fields.push('winner_id = ?'); values.push(updateFields.winnerId); }
 
     if (updateFields.participant1 !== undefined) {
       fields.push('p1_id = ?', 'p1_name = ?', 'p1_imageUrl = ?');
@@ -157,7 +160,7 @@ app.post('/api/rounds/:round/restart', async (req, res) => {
     const currentMatches = await query.all('SELECT id FROM matches WHERE round = ?', [roundNum]);
     for (const cm of currentMatches) {
       await query.run('DELETE FROM votes WHERE match_id = ?', [cm.id]);
-      await query.run(`UPDATE matches SET votes1 = 0, votes2 = 0, status = 'active', endTime = ? WHERE id = ?`, [endTime, cm.id]);
+      await query.run(`UPDATE matches SET votes1 = 0, votes2 = 0, status = 'active', endTime = ?, winner_id = NULL WHERE id = ?`, [endTime, cm.id]);
     }
     
     res.json({ success: true, message: 'Round restarted successfully.' });

@@ -13,6 +13,7 @@ export interface Match {
     votes2: number;
     status: "pending" | "active" | "completed";
     endTime: number | null; // Timestamp for countdown
+    winnerId?: string | null;
 }
 
 export interface TournamentNode {
