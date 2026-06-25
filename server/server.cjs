@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { query } = require('./db.cjs');
 
 const app = express();
@@ -245,6 +246,17 @@ app.post('/api/matches/:id/vote', async (req, res) => {
     console.error('Error casting vote:', error);
     res.status(500).json({ error: 'Database transaction failed during voting.' });
   }
+});
+
+// Serve static files from the Vite production build
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Fallback all non-API requests to the React SPA index.html
+app.get('*', (req, res) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 app.listen(PORT, () => {
