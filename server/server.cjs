@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { query } = require('./db.cjs');
+const { data, saveData } = require('./db.cjs');
 
 const app = express();
 
@@ -13,28 +13,26 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const PORT = process.env.PORT || 5000;
 
 // GET /api/matches - Retrieve all matches, appending user voting status if userId parameter is provided
-app.get('/api/matches', async (req, res) => {
+app.get('/api/matches', (req, res) => {
   const { userId } = req.query;
   try {
-    const dbMatches = await query.all('SELECT * FROM matches');
-    
-    // Map database flat row representation to frontend Match structure
-    const matches = dbMatches.map(m => ({
+    // Map database structure to frontend structure and clone to avoid direct mutations
+    const matches = data.matches.map(m => ({
       id: m.id,
       round: m.round,
-      participant1: m.p1_id ? { id: m.p1_id, name: m.p1_name, imageUrl: m.p1_imageUrl } : null,
-      participant2: m.p2_id ? { id: m.p2_id, name: m.p2_name, imageUrl: m.p2_imageUrl } : null,
+      participant1: m.participant1,
+      participant2: m.participant2,
       votes1: m.votes1,
       votes2: m.votes2,
       status: m.status,
       endTime: m.endTime,
-      winnerId: m.winner_id || null,
+      winnerId: m.winnerId,
       userVotedOption: null
     }));
 
     // If userId is provided, fetch which matches they've already voted on
     if (userId) {
-      const userVotes = await query.all('SELECT * FROM votes WHERE user_id = ?', [userId]);
+      const userVotes = data.votes.filter(v => v.user_id === userId);
       const votesMap = {};
       userVotes.forEach(v => {
         votesMap[v.match_id] = v.option_index;
@@ -55,27 +53,21 @@ app.get('/api/matches', async (req, res) => {
 });
 
 // POST /api/matches - Create a new match in the tournament
-app.post('/api/matches', async (req, res) => {
+app.post('/api/matches', (req, res) => {
   const { id, round, participant1, participant2, votes1, votes2, status, endTime, winnerId } = req.body;
   try {
-    await query.run(`
-      INSERT INTO matches (id, round, p1_id, p1_name, p1_imageUrl, p2_id, p2_name, p2_imageUrl, votes1, votes2, status, endTime, winner_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      id,
-      round,
-      participant1?.id || null,
-      participant1?.name || null,
-      participant1?.imageUrl || null,
-      participant2?.id || null,
-      participant2?.name || null,
-      participant2?.imageUrl || null,
-      votes1 || 0,
-      votes2 || 0,
-      status || 'pending',
-      endTime || null,
-      winnerId || null
-    ]);
+    data.matches.push({
+      id: id,
+      round: parseInt(round, 10),
+      participant1: participant1 || null,
+      participant2: participant2 || null,
+      votes1: votes1 || 0,
+      votes2: votes2 || 0,
+      status: status || 'pending',
+      endTime: endTime || null,
+      winnerId: winnerId || null
+    });
+    saveData();
     res.status(201).json({ success: true, message: 'Match created successfully' });
   } catch (error) {
     console.error('Error creating match:', error);
@@ -84,44 +76,25 @@ app.post('/api/matches', async (req, res) => {
 });
 
 // PUT /api/matches/:id - Update an existing match dynamically
-app.put('/api/matches/:id', async (req, res) => {
+app.put('/api/matches/:id', (req, res) => {
   const { id } = req.params;
   const updateFields = req.body;
   try {
-    const fields = [];
-    const values = [];
-
-    if (updateFields.round !== undefined) { fields.push('round = ?'); values.push(updateFields.round); }
-    if (updateFields.status !== undefined) { fields.push('status = ?'); values.push(updateFields.status); }
-    if (updateFields.endTime !== undefined) { fields.push('endTime = ?'); values.push(updateFields.endTime); }
-    if (updateFields.votes1 !== undefined) { fields.push('votes1 = ?'); values.push(updateFields.votes1); }
-    if (updateFields.votes2 !== undefined) { fields.push('votes2 = ?'); values.push(updateFields.votes2); }
-    if (updateFields.winnerId !== undefined) { fields.push('winner_id = ?'); values.push(updateFields.winnerId); }
-
-    if (updateFields.participant1 !== undefined) {
-      fields.push('p1_id = ?', 'p1_name = ?', 'p1_imageUrl = ?');
-      values.push(
-        updateFields.participant1?.id || null,
-        updateFields.participant1?.name || null,
-        updateFields.participant1?.imageUrl || null
-      );
+    const match = data.matches.find(m => m.id === id);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found.' });
     }
 
-    if (updateFields.participant2 !== undefined) {
-      fields.push('p2_id = ?', 'p2_name = ?', 'p2_imageUrl = ?');
-      values.push(
-        updateFields.participant2?.id || null,
-        updateFields.participant2?.name || null,
-        updateFields.participant2?.imageUrl || null
-      );
-    }
+    if (updateFields.round !== undefined) match.round = parseInt(updateFields.round, 10);
+    if (updateFields.status !== undefined) match.status = updateFields.status;
+    if (updateFields.endTime !== undefined) match.endTime = updateFields.endTime;
+    if (updateFields.votes1 !== undefined) match.votes1 = updateFields.votes1;
+    if (updateFields.votes2 !== undefined) match.votes2 = updateFields.votes2;
+    if (updateFields.winnerId !== undefined) match.winnerId = updateFields.winnerId;
+    if (updateFields.participant1 !== undefined) match.participant1 = updateFields.participant1;
+    if (updateFields.participant2 !== undefined) match.participant2 = updateFields.participant2;
 
-    if (fields.length === 0) {
-      return res.status(400).json({ error: 'No fields provided for update.' });
-    }
-
-    values.push(id);
-    await query.run(`UPDATE matches SET ${fields.join(', ')} WHERE id = ?`, values);
+    saveData();
     res.json({ success: true, message: 'Match updated successfully.' });
   } catch (error) {
     console.error('Error updating match:', error);
@@ -130,11 +103,12 @@ app.put('/api/matches/:id', async (req, res) => {
 });
 
 // DELETE /api/matches/:id - Delete a match and clean up its votes
-app.delete('/api/matches/:id', async (req, res) => {
+app.delete('/api/matches/:id', (req, res) => {
   const { id } = req.params;
   try {
-    await query.run('DELETE FROM matches WHERE id = ?', [id]);
-    await query.run('DELETE FROM votes WHERE match_id = ?', [id]);
+    data.matches = data.matches.filter(m => m.id !== id);
+    data.votes = data.votes.filter(v => v.match_id !== id);
+    saveData();
     res.json({ success: true, message: 'Match deleted successfully.' });
   } catch (error) {
     console.error('Error deleting match:', error);
@@ -143,15 +117,16 @@ app.delete('/api/matches/:id', async (req, res) => {
 });
 
 // DELETE /api/rounds/:round - Delete a round and all subsequent rounds
-app.delete('/api/rounds/:round', async (req, res) => {
+app.delete('/api/rounds/:round', (req, res) => {
   const { round } = req.params;
   const roundNum = parseInt(round, 10);
   try {
-    const matchesToDelete = await query.all('SELECT id FROM matches WHERE round >= ?', [roundNum]);
-    for (const m of matchesToDelete) {
-      await query.run('DELETE FROM matches WHERE id = ?', [m.id]);
-      await query.run('DELETE FROM votes WHERE match_id = ?', [m.id]);
-    }
+    const matchIdsToDelete = new Set(
+      data.matches.filter(m => m.round >= roundNum).map(m => m.id)
+    );
+    data.matches = data.matches.filter(m => !matchIdsToDelete.has(m.id));
+    data.votes = data.votes.filter(v => !matchIdsToDelete.has(v.match_id));
+    saveData();
     res.json({ success: true, message: 'Round and subsequent rounds deleted successfully.' });
   } catch (error) {
     console.error('Error deleting round:', error);
@@ -159,9 +134,8 @@ app.delete('/api/rounds/:round', async (req, res) => {
   }
 });
 
-
 // POST /api/rounds/:round/restart - Reset round matches and delete future rounds
-app.post('/api/rounds/:round/restart', async (req, res) => {
+app.post('/api/rounds/:round/restart', (req, res) => {
   const { round } = req.params;
   const { duration } = req.body;
   const roundNum = parseInt(round, 10);
@@ -169,19 +143,25 @@ app.post('/api/rounds/:round/restart', async (req, res) => {
 
   try {
     // 1. Delete all matches (and their votes) for rounds > round
-    const futureMatches = await query.all('SELECT id FROM matches WHERE round > ?', [roundNum]);
-    for (const fm of futureMatches) {
-      await query.run('DELETE FROM matches WHERE id = ?', [fm.id]);
-      await query.run('DELETE FROM votes WHERE match_id = ?', [fm.id]);
-    }
+    const futureMatchIds = new Set(
+      data.matches.filter(m => m.round > roundNum).map(m => m.id)
+    );
+    data.matches = data.matches.filter(m => !futureMatchIds.has(m.id));
+    data.votes = data.votes.filter(v => !futureMatchIds.has(v.match_id));
     
     // 2. Reset votes and set active for the current round matches
-    const currentMatches = await query.all('SELECT id FROM matches WHERE round = ?', [roundNum]);
-    for (const cm of currentMatches) {
-      await query.run('DELETE FROM votes WHERE match_id = ?', [cm.id]);
-      await query.run(`UPDATE matches SET votes1 = 0, votes2 = 0, status = 'active', endTime = ?, winner_id = NULL WHERE id = ?`, [endTime, cm.id]);
-    }
-    
+    data.matches.forEach(m => {
+      if (m.round === roundNum) {
+        data.votes = data.votes.filter(v => v.match_id !== m.id);
+        m.votes1 = 0;
+        m.votes2 = 0;
+        m.status = 'active';
+        m.endTime = endTime;
+        m.winnerId = null;
+      }
+    });
+
+    saveData();
     res.json({ success: true, message: 'Round restarted successfully.' });
   } catch (error) {
     console.error('Error restarting round:', error);
@@ -190,7 +170,7 @@ app.post('/api/rounds/:round/restart', async (req, res) => {
 });
 
 // POST /api/matches/:id/vote - Cast a vote for Option 1 or 2
-app.post('/api/matches/:id/vote', async (req, res) => {
+app.post('/api/matches/:id/vote', (req, res) => {
   const { id } = req.params;
   const { userId, optionIndex } = req.body;
 
@@ -200,7 +180,7 @@ app.post('/api/matches/:id/vote', async (req, res) => {
 
   try {
     // Check if match exists and is active
-    const match = await query.get('SELECT * FROM matches WHERE id = ?', [id]);
+    const match = data.matches.find(m => m.id === id);
     if (!match) {
       return res.status(404).json({ error: 'Match not found.' });
     }
@@ -212,33 +192,39 @@ app.post('/api/matches/:id/vote', async (req, res) => {
     }
 
     // Check if user has already voted
-    const existingVote = await query.get('SELECT * FROM votes WHERE match_id = ? AND user_id = ?', [id, userId]);
+    const existingVote = data.votes.find(v => v.match_id === id && v.user_id === userId);
     if (existingVote) {
       return res.status(400).json({ error: 'You have already voted on this match.' });
     }
 
-    // Atomic transaction to record user vote and increment match vote count
-    const voteField = optionIndex === 1 ? 'votes1' : 'votes2';
+    // Record user vote
+    data.votes.push({
+      match_id: id,
+      user_id: userId,
+      option_index: optionIndex
+    });
+
+    // Increment match vote count
+    if (optionIndex === 1) {
+      match.votes1 += 1;
+    } else {
+      match.votes2 += 1;
+    }
     
-    // We execute the insert and update as sequential queries on the database wrapper
-    await query.run('INSERT INTO votes (match_id, user_id, option_index) VALUES (?, ?, ?)', [id, userId, optionIndex]);
-    await query.run(`UPDATE matches SET ${voteField} = ${voteField} + 1 WHERE id = ?`, [id]);
-    
-    // Retrieve updated match data to return back to frontend
-    const updatedMatch = await query.get('SELECT * FROM matches WHERE id = ?', [id]);
+    saveData();
     
     res.json({
       success: true,
       message: 'Vote registered successfully.',
       match: {
-        id: updatedMatch.id,
-        round: updatedMatch.round,
-        participant1: updatedMatch.p1_id ? { id: updatedMatch.p1_id, name: updatedMatch.p1_name, imageUrl: updatedMatch.p1_imageUrl } : null,
-        participant2: updatedMatch.p2_id ? { id: updatedMatch.p2_id, name: updatedMatch.p2_name, imageUrl: updatedMatch.p2_imageUrl } : null,
-        votes1: updatedMatch.votes1,
-        votes2: updatedMatch.votes2,
-        status: updatedMatch.status,
-        endTime: updatedMatch.endTime,
+        id: match.id,
+        round: match.round,
+        participant1: match.participant1,
+        participant2: match.participant2,
+        votes1: match.votes1,
+        votes2: match.votes2,
+        status: match.status,
+        endTime: match.endTime,
         userVotedOption: optionIndex
       }
     });
