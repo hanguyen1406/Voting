@@ -4,6 +4,7 @@ import type { Match, Participant } from '../types';
 import { Plus, Clock } from 'lucide-react';
 import { Bracket } from '../components/Bracket';
 import { Leaderboard } from '../components/Leaderboard';
+import vsGif from '../assets/vs.gif';
 
 interface MatchCountdownProps {
   endTime: number;
@@ -395,7 +396,7 @@ export const AdminBoard: React.FC = () => {
                 {/* VS Center */}
                 <div className="w-20 h-full shrink-0 bg-[#0a0604] flex items-center justify-center relative z-10">
                   <div className="absolute inset-0 flex items-center justify-center transform -skew-x-12 bg-gradient-to-b from-[#4a3424] via-[#1f140e] to-[#0a0604] border-x-2 border-[#856b46]/60"></div>
-                  <span className="font-serif text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-[#e8d5c4] to-[#a38059] relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] tracking-widest">VS</span>
+                  <img src={vsGif} alt="VS" className="w-[110px] h-[92px] max-w-none object-contain relative z-10 select-none pointer-events-none" />
                 </div>
 
                 {/* Option 2 side (Blue Gradient) */}

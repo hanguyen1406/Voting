@@ -5,6 +5,7 @@ import { Bracket } from '../components/Bracket';
 import { LogIn, LogOut, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Leaderboard } from '../components/Leaderboard';
+import vsGif from '../assets/vs.gif';
 
 export const VotingBoard: React.FC = () => {
     const { matches, currentUser, loginWithGoogle, logout, vote } = useTournament();
@@ -128,7 +129,7 @@ export const VotingBoard: React.FC = () => {
                             {/* VS Center */}
                             <div className="w-16 h-16 shrink-0 bg-[#0a0604] flex items-center justify-center z-20 relative">
                                 <div className="absolute inset-0 flex items-center justify-center transform -skew-x-12 bg-gradient-to-b from-[#3a281e] to-[#0a0604] border-x border-[#856b46]/50"></div>
-                                <span className="font-serif text-2xl font-black italic text-[#e8d5c4] relative z-10 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">VS</span>
+                                <img src={vsGif} alt="VS" className="w-[90px] h-[60px] max-w-none object-contain relative z-10 select-none pointer-events-none" />
                             </div>
 
                             {/* P2 Bar (Blue) */}
