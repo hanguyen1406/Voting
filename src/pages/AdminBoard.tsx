@@ -1,12 +1,59 @@
 import React, { useState } from 'react';
 import { useTournament } from '../context/TournamentContext';
 import type { Match, Participant } from '../types';
-import { Plus } from 'lucide-react';
+import { Plus, Clock } from 'lucide-react';
 import { Bracket } from '../components/Bracket';
+import { Leaderboard } from '../components/Leaderboard';
+
+interface MatchCountdownProps {
+  endTime: number;
+  onComplete?: () => void;
+}
+
+const MatchCountdown: React.FC<MatchCountdownProps> = ({ endTime, onComplete }) => {
+  const [timeLeft, setTimeLeft] = useState<number>(Math.max(0, endTime - Date.now()));
+
+  React.useEffect(() => {
+    setTimeLeft(Math.max(0, endTime - Date.now()));
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, endTime - Date.now());
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        if (onComplete) onComplete();
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [endTime, onComplete]);
+
+  if (timeLeft <= 0) {
+    return (
+      <span className="text-red-500 font-bold uppercase tracking-wider text-xs">
+        ⏱️ Đã hết giờ
+      </span>
+    );
+  }
+
+  const minutes = Math.floor(timeLeft / 60000);
+  const seconds = Math.floor((timeLeft % 60000) / 1000);
+  const formatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+  return (
+    <span className="text-orange-400 font-mono font-black text-sm tracking-widest animate-pulse">
+      ⏱️ {formatted}
+    </span>
+  );
+};
 
 export const AdminBoard: React.FC = () => {
   const { matches, addMatch, updateMatch, deleteMatch, deleteRound } = useTournament();
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>(undefined);
+  const [countdownDuration, setCountdownDuration] = useState<number>(5);
+  const [activeTab, setActiveTab] = useState<'bracket' | 'leaderboard'>('bracket');
+
+  const maxRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 1;
+  const maxRoundMatches = matches.filter(m => m.round === maxRound);
+  const isFinalRound = maxRoundMatches.length === 1;
 
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -17,6 +64,37 @@ export const AdminBoard: React.FC = () => {
     p1Name: '', p1Img: '', p2Name: '', p2Img: '',
     winnerId: null, p1Id: '', p2Id: ''
   });
+
+  const currentMatch = isEditing ? matches.find(m => m.id === isEditing) : null;
+
+  const handleStartCountdown = async () => {
+    if (!isEditing) return;
+    const endTime = Date.now() + countdownDuration * 60 * 1000;
+    try {
+      await updateMatch(isEditing, {
+        status: 'active',
+        endTime: endTime
+      });
+    } catch (error) {
+      console.error('Failed to start countdown:', error);
+    }
+  };
+
+  const handlePauseCountdown = async () => {
+    if (!isEditing || !currentMatch || !currentMatch.endTime) return;
+    const remainingTimeMs = currentMatch.endTime - Date.now();
+    const remainingMin = Math.max(1, Math.ceil(remainingTimeMs / 60000));
+    setCountdownDuration(remainingMin);
+
+    try {
+      await updateMatch(isEditing, {
+        status: 'pending',
+        endTime: null
+      });
+    } catch (error) {
+      console.error('Failed to pause countdown:', error);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, option: 1 | 2) => {
     const file = e.target.files?.[0];
@@ -84,6 +162,11 @@ export const AdminBoard: React.FC = () => {
     if (matches.length === 0) return;
     const maxRound = Math.max(...matches.map(m => m.round));
     const currentRoundMatches = matches.filter(m => m.round === maxRound);
+    
+    if (currentRoundMatches.length <= 1) {
+      alert("Đã ở vòng đấu chung kết (chỉ còn 2 người), không thể tạo vòng tiếp theo!");
+      return;
+    }
     
     // Check if ALL matches in this round have a winner selected (excluding byes)
     const undecidedMatches = currentRoundMatches.filter(m => {
@@ -161,27 +244,56 @@ export const AdminBoard: React.FC = () => {
         </header>
 
         {/* Existing Matches List */}
-        <section>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-300">Cây Giải Đấu</h2>
-            <button 
-              onClick={generateNextRound}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium transition-transform active:scale-95"
-            >
-              Chuyển Người Thắng Sang Vòng Tiếp Theo
-            </button>
+        <section className="mt-8">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex bg-black/40 border border-white/10 rounded-lg p-1">
+              <button 
+                onClick={() => setActiveTab('bracket')}
+                className={`px-4 py-1.5 rounded text-xs md:text-sm font-bold uppercase tracking-wider transition-all ${
+                  activeTab === 'bracket' 
+                    ? 'bg-orange-600 text-white shadow-md' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Cây Giải Đấu
+              </button>
+              <button 
+                onClick={() => setActiveTab('leaderboard')}
+                className={`px-4 py-1.5 rounded text-xs md:text-sm font-bold uppercase tracking-wider transition-all ${
+                  activeTab === 'leaderboard' 
+                    ? 'bg-orange-600 text-white shadow-md' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Bảng Xếp Hạng
+              </button>
+            </div>
+            {activeTab === 'bracket' && !isFinalRound && (
+              <button 
+                onClick={generateNextRound}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium transition-transform active:scale-95"
+              >
+                Chuyển Người Thắng Sang Vòng Tiếp Theo
+              </button>
+            )}
           </div>
-          <Bracket 
-            matches={matches} 
-            onMatchClick={(m) => {
-              setSelectedMatchId(m.id);
-              handleEditClick(m);
-            }} 
-            activeMatchId={selectedMatchId}
-            onDeleteRound={handleDeleteRound}
-          />
-          
-          {matches.length === 0 && <p className="text-gray-500 italic mt-8">Chưa có trận đấu nào.</p>}
+
+          {activeTab === 'bracket' ? (
+            <>
+              <Bracket 
+                matches={matches} 
+                onMatchClick={(m) => {
+                  setSelectedMatchId(m.id);
+                  handleEditClick(m);
+                }} 
+                activeMatchId={selectedMatchId}
+                onDeleteRound={handleDeleteRound}
+              />
+              {matches.length === 0 && <p className="text-gray-500 italic mt-8">Chưa có trận đấu nào.</p>}
+            </>
+          ) : (
+            <Leaderboard matches={matches} />
+          )}
         </section>
       </div>
 
@@ -314,6 +426,35 @@ export const AdminBoard: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Countdown Display / Set Duration */}
+              <div className="flex items-center justify-center mt-3 h-8">
+                {isEditing && currentMatch?.status === 'active' && currentMatch?.endTime ? (
+                  <div className="flex items-center gap-2 bg-orange-950/30 border border-orange-500/20 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(249,115,22,0.1)]">
+                    <MatchCountdown 
+                      endTime={currentMatch.endTime} 
+                      onComplete={() => {
+                        updateMatch(currentMatch.id, { status: 'completed' });
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
+                    <Clock size={13} className="text-orange-400 shrink-0" />
+                    <span>Thời gian:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="180"
+                      value={countdownDuration}
+                      onChange={(e) => setCountdownDuration(Math.max(1, Number(e.target.value)))}
+                      className="w-10 bg-transparent border-b border-white/20 text-white font-bold text-center focus:outline-none focus:border-orange-500 p-0 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span>phút</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <form onSubmit={handleCreateOrUpdate} className="flex-1 flex flex-col min-h-0 justify-between">
@@ -374,20 +515,42 @@ export const AdminBoard: React.FC = () => {
 
               {/* Action Buttons - Fixed at the bottom */}
               <div className="flex items-center justify-between pt-4 border-t border-white/10 shrink-0">
-                {isEditing && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (confirm('Bạn có chắc chắn muốn xoá trận đấu này?')) {
-                        deleteMatch(isEditing);
-                        setShowFormModal(false);
-                      }
-                    }}
-                    className="px-4 py-2 bg-red-950/80 hover:bg-red-900 border border-red-500/30 text-red-200 rounded font-medium transition-colors"
-                  >
-                    Xoá Trận Đấu
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {isEditing && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Bạn có chắc chắn muốn xoá trận đấu này?')) {
+                          deleteMatch(isEditing);
+                          setShowFormModal(false);
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-950/80 hover:bg-red-900 border border-red-500/30 text-red-200 rounded font-medium transition-colors"
+                    >
+                      Xoá Trận Đấu
+                    </button>
+                  )}
+
+                  {isEditing && currentMatch?.status !== 'active' && (
+                    <button 
+                      type="button"
+                      onClick={handleStartCountdown}
+                      className="px-4 py-2 bg-green-900 hover:bg-green-800 border border-green-500/30 text-green-100 rounded font-medium transition-colors flex items-center gap-1.5"
+                    >
+                      <Clock size={14} /> Bắt đầu
+                    </button>
+                  )}
+
+                  {isEditing && currentMatch?.status === 'active' && (
+                    <button 
+                      type="button"
+                      onClick={handlePauseCountdown}
+                      className="px-4 py-2 bg-yellow-900 hover:bg-yellow-800 border border-yellow-500/30 text-yellow-100 rounded font-medium transition-colors flex items-center gap-1.5"
+                    >
+                      <Clock size={14} /> Tạm dừng
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex gap-3 ml-auto">
                   <button type="button" onClick={() => setShowFormModal(false)} className="px-6 py-3 rounded-lg font-medium text-gray-300 hover:bg-white/5">

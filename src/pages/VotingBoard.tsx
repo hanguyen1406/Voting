@@ -4,11 +4,13 @@ import { Countdown } from '../components/Countdown';
 import { Bracket } from '../components/Bracket';
 import { LogIn, LogOut, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Leaderboard } from '../components/Leaderboard';
 
 export const VotingBoard: React.FC = () => {
     const { matches, currentUser, loginWithGoogle, logout, vote } = useTournament();
     const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>(undefined);
     const [showVotingModal, setShowVotingModal] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState<'bracket' | 'leaderboard'>('bracket');
 
     const activeMatch = matches.find((m) => m.id === selectedMatchId);
 
@@ -21,6 +23,31 @@ export const VotingBoard: React.FC = () => {
             {/* Header */}
             <header className="p-4 flex justify-between items-center border-b border-white/5 bg-black/20">
                 <h1 className="text-xl font-bold text-orange-400 uppercase tracking-wider">Giải Đấu</h1>
+                
+                {/* Tab Navigator */}
+                <div className="flex bg-black/40 border border-white/10 rounded-lg p-1">
+                    <button 
+                        onClick={() => setActiveTab('bracket')}
+                        className={`px-4 py-1.5 rounded text-xs md:text-sm font-bold uppercase tracking-wider transition-all ${
+                            activeTab === 'bracket' 
+                                ? 'bg-orange-600 text-white shadow-md' 
+                                : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        Sơ Đồ Thi Đấu
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('leaderboard')}
+                        className={`px-4 py-1.5 rounded text-xs md:text-sm font-bold uppercase tracking-wider transition-all ${
+                            activeTab === 'leaderboard' 
+                                ? 'bg-orange-600 text-white shadow-md' 
+                                : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        Bảng Xếp Hạng
+                    </button>
+                </div>
+
                 <div className="flex gap-4 items-center">
                     {currentUser && currentUser.roles.includes("admin") && (
                         <Link to="/admin" className="text-gray-400 hover:text-white flex items-center gap-2">
@@ -45,17 +72,25 @@ export const VotingBoard: React.FC = () => {
                 </div>
             </header>
 
-            {/* Main Content - Full Screen Bracket Tree */}
+            {/* Main Content */}
             <main className="flex-1 flex overflow-hidden">
-                <div className="flex-1 overflow-auto custom-scrollbar p-8 bg-gradient-to-br from-[#1c1a17] to-black">
-                    <Bracket 
-                        matches={matches} 
-                        onMatchClick={(m) => {
-                            setSelectedMatchId(m.id);
-                            setShowVotingModal(true);
-                        }} 
-                        activeMatchId={activeMatch?.id}
-                    />
+                <div className="flex-1 overflow-auto custom-scrollbar p-8 bg-gradient-to-br from-[#1c1a17] to-black flex flex-col items-center">
+                    {activeTab === 'bracket' ? (
+                        <div className="w-full h-full">
+                            <Bracket 
+                                matches={matches} 
+                                onMatchClick={(m) => {
+                                    setSelectedMatchId(m.id);
+                                    setShowVotingModal(true);
+                                }} 
+                                activeMatchId={activeMatch?.id}
+                            />
+                        </div>
+                    ) : (
+                        <div className="w-full max-w-4xl">
+                            <Leaderboard matches={matches} />
+                        </div>
+                    )}
                 </div>
             </main>
 
